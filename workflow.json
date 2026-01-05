@@ -1,0 +1,612 @@
+{
+  "name": "Telegram Termin-Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Telegram Trigger').isExecuted ? $node[\"Telegram Trigger\"].json.message.text : ($('Transcribe a recording').isExecuted ? $node[\"Transcribe a recording\"].json.text : \"Guten Morgen! Bitte gib mir eine kurze Übersicht über alle meine Termine für den heutigen Tag.\") }}",
+        "options": {
+          "systemMessage": "=### ROLLE UND AUFGABE\nDu bist ein hochpräziser Kalender-Assistent. Deine Hauptaufgabe ist das Verwalten von Google Calendar Terminen.\n\n### DATUM-REFERENZ (WICHTIG FÜR BERECHNUNGEN)\n- Heute ist: {{ $now.setZone('Europe/Berlin').toFormat('EEEE, dd.MM.yyyy') }}\n- Aktuelle Uhrzeit: {{ $now.setZone('Europe/Berlin').toFormat('HH:mm') }} Uhr\n- Referenz-Zeitstempel (ISO): {{ $now.setZone('Europe/Berlin').toISO() }}\n\nWICHTIG: Wenn du Termine abfragst oder suchst, musst du zwingend die Parameter 'timeMin' (Startzeitpunkt) und 'timeMax' (Endzeitpunkt) im Tool-Aufruf verwenden. Nutze dafür das ISO-Format (z.B. 2026-01-05T00:00:00Z). Berechne diese Daten basierend auf dem oben genannten heutigen Datum.\n\n### TOOL-LOGIK & DATUMSFORMATE\n1. Nutze für ALLE Tool-Aufrufe (Start- und Endzeit) ausschließlich das ISO-8601 Format.\n2. Berechne relative Zeitangaben (z.B. \"morgen\", \"nächsten Montag\") immer ausgehend vom oben genannten Referenz-Zeitstempel.\n3. Ohne E-Mail-Adresse: Nutze 'create_event_simple'.\n4. Mit E-Mail-Adresse: Nutze 'create_event_with_attendees'.\n\n### ABSOLUTE STOPP-REGEL FÜR ÄNDERUNGEN/LÖSCHUNGEN\nDu darfst die Tools 'Delete event' oder 'Update event' NIEMALS direkt ausführen.\nSchritt 1: Suche den Termin mit 'Get many events' (Zeitraum 00:00 bis 23:59 Uhr des betroffenen Tages).\nSchritt 2: Unterbrich den Prozess und antworte dem Nutzer: \"Ich habe folgenden Termin gefunden: [Name, Zeit]. Soll ich diesen wirklich [löschen/ändern]?\"\nSchritt 3: Erst nach expliziter Bestätigung (\"Ja\", \"OK\", \"Bestätigen\") durch den Nutzer darfst du die Aktion mit der gefundenen 'id' ausführen.\n\n### LOGIK FÜR TERMIN-ABFRAGEN (LESEN)\nWenn der Nutzer nach Terminen fragt (egal für welches Datum):\n1. Zwingender Tool-Aufruf: Du musst IMMER zuerst das Tool 'Get many events' nutzen. Antworte niemals aus dem Gedächtnis.\n2. Zeitraum-Definition: Setze für die Suche den Zeitraum 'After' auf 00:00 Uhr und 'Before' auf 23:59 Uhr des angefragten Tages.\n3. Ergebnis-Check:\n- Wenn das Tool Ergebnisse liefert: Liste diese präzise für das angefragte Datum auf.\n- Wenn das Tool leer zurückkommt: Antworte \"Ich konnte für den [Datum] keine Termine in deinem Kalender finden.\".\n4. Heute-Regel: Nenne einen Termin NUR dann „heute“, wenn das Startdatum exakt der {{ $now.setZone('Europe/Berlin').toFormat('dd.MM.yyyy') }} entspricht.\n5. ERFINDE NIEMALS DATEN: Wenn das Tool nicht genutzt wurde oder nichts findet, darfst du keine Termine halluzinieren.\n\n- Nutze für das Tool 'Get_many_events_in_Google_Calendar' zwingend die Parameter 'after' (für den Beginn) und 'before' (für das Ende) des Zeitraums.\n- Wenn du das Tool 'Get_many_events_in_Google_Calendar' aufrufst, fülle IMMER die Felder 'timeMin' und 'timeMax' mit den von dir berechneten ISO-Zeitstempeln aus. Sende niemals einen leeren Tool-Aufruf.\n\n### BRIEFING-LOGIK\n-Wenn der Input 'Erstelle mir eine freundliche Zusammenfassung...' lautet, starte die Antwort mit 'Guten Morgen Marco!' und gib einen motivierenden Ausblick auf den Tag.\n- Persönliche Ansprache: Wenn der Nutzer mit \"Guten Morgen!\" begrüßt wird (automatischer Trigger), antworte besonders freundlich und strukturiert.\n- Tagesfokus: Fasse die Termine für heute chronologisch zusammen und weise auf eventuelle Lücken im Kalender hin.\n- Keine Rückfragen: Da das morgendliche Briefing eine einseitige Information ist, stelle keine unnötigen Fragen am Ende der Nachricht, es sei denn, ein Termin ist unklar.\n\n### ALLGEMEINE REGELN\n- Antworte immer auf Deutsch.\n- Sei präzise und fasse dich kurz, sofern keine Rückfragen nötig sind.\n- Falls Parameter fehlen (z.B. Uhrzeit bei einem neuen Termin), frage höflich nach, anstatt zu raten."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        32,
+        -160
+      ],
+      "id": "1e0723a8-66a3-450e-b506-f767ee79862e",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=977291745"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -80,
+        64
+      ],
+      "id": "d3774256-1b6d-436d-a577-30dce6b03835",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Use this tool to search for existing calendar events. You MUST provide 'timeMin' (After) and 'timeMax' (Before) in ISO-8601 format. Example: '2026-01-05T00:00:00Z'. Always use the year 2026.",
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "marco.palummieri@gmail.com",
+          "mode": "list",
+          "cachedResultName": "marco.palummieri@googlemail.com"
+        },
+        "returnAll": true,
+        "timeMin": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('After', ``, 'string') }}",
+        "timeMax": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Before', ``, 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        32,
+        160
+      ],
+      "id": "082d0d25-be52-456a-801c-75175b26e10d",
+      "name": "Get many events in Google Calendar",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "vJG7LWd2giBVmm9X",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "calendar": {
+          "__rl": true,
+          "value": "marco.palummieri@gmail.com",
+          "mode": "list",
+          "cachedResultName": "marco.palummieri@googlemail.com"
+        },
+        "eventId": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Event_ID', `ONLY use this tool if the user has EXPLICITLY confirmed the deletion in the current turn after you named the event title and time. If not confirmed yet, you MUST ask for permission first and stop here.`, 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        176,
+        192
+      ],
+      "id": "96a7912a-84e8-41d2-8a1d-6709098b6783",
+      "name": "Delete event in Google Calendar",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "vJG7LWd2giBVmm9X",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "value": "marco.palummieri@gmail.com",
+          "mode": "list",
+          "cachedResultName": "marco.palummieri@googlemail.com"
+        },
+        "eventId": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Event_ID', `ONLY use this tool after the user has confirmed the changes. You MUST provide the 'id' obtained from the 'Get many events' tool. Only update the specific fields (like summary or start time) that the user requested to change. \n\nWhen rescheduling, you MUST provide both 'Start Time' and 'End Time' in the update fields.`, 'string') }}",
+        "updateFields": {
+          "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('End', ``, 'string') }}",
+          "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start', ``, 'string') }}",
+          "summary": "="
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        320,
+        144
+      ],
+      "id": "15890bbb-6601-46d3-a1ac-8894f11cbf96",
+      "name": "Update event in Google Calendar",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "vJG7LWd2giBVmm9X",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "marco.palummieri@gmail.com",
+          "mode": "list",
+          "cachedResultName": "marco.palummieri@googlemail.com"
+        },
+        "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start', ``, 'string') }}",
+        "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('End', ``, 'string') }}",
+        "additionalFields": {
+          "attendees": [],
+          "summary": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Summary', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        464,
+        192
+      ],
+      "id": "31861c7e-3e24-459f-a386-0e4059d8e2e2",
+      "name": "google_calendar_simple",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "vJG7LWd2giBVmm9X",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "marco.palummieri@gmail.com",
+          "mode": "list",
+          "cachedResultName": "marco.palummieri@googlemail.com"
+        },
+        "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start', ``, 'string') }}",
+        "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('End', ``, 'string') }}",
+        "additionalFields": {
+          "attendees": [
+            "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('attendees0_Attendees', ``, 'string') }}"
+          ],
+          "summary": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Summary', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        624,
+        160
+      ],
+      "id": "f51e52aa-5d43-4d66-b02b-432efb3a4aa9",
+      "name": "google_calendar_with_invite",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "vJG7LWd2giBVmm9X",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -960,
+        -144
+      ],
+      "id": "f986d3e8-e0fa-4cbd-b9a3-8bbf640ffd8e",
+      "name": "Telegram Trigger",
+      "webhookId": "d7d4ec36-0b17-4deb-a838-c13072e8107b",
+      "credentials": {
+        "telegramApi": {
+          "id": "SAFZXN6ur20J5oL7",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "977291745",
+        "text": "={{ $json.output.split('}').pop().trim() }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        -160
+      ],
+      "id": "8c8857f7-a052-4f79-bebe-beb965e31968",
+      "name": "Send a text message",
+      "webhookId": "8a4f8979-6b10-4e67-94b1-c8ab8703e7a2",
+      "credentials": {
+        "telegramApi": {
+          "id": "SAFZXN6ur20J5oL7",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Du bist leider nicht autorisiert um Termine zu machen.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -576,
+        -128
+      ],
+      "id": "ac8b9613-ccea-4e80-89c8-af04fd129e53",
+      "name": "Send a text message1",
+      "webhookId": "cbd7625a-48f0-40e1-a06e-c9ea102dd300",
+      "credentials": {
+        "telegramApi": {
+          "id": "SAFZXN6ur20J5oL7",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 1000,
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -208,
+        -16
+      ],
+      "id": "81cd6745-fc0b-44c8-b316-5b604fa48eea",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "KkgeOKvRJffybuN4",
+          "name": "OpenAi Marco"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.voice.file_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -336,
+        -320
+      ],
+      "id": "d75b3789-d1ef-41af-811d-262767df9f2e",
+      "name": "Get a file",
+      "webhookId": "fd6bc5e7-9b76-48af-887a-138d369bee28",
+      "credentials": {
+        "telegramApi": {
+          "id": "SAFZXN6ur20J5oL7",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        -176,
+        -320
+      ],
+      "id": "24a556d4-847a-47e1-8d5a-93fcc03988c0",
+      "name": "Transcribe a recording",
+      "credentials": {
+        "openAiApi": {
+          "id": "KkgeOKvRJffybuN4",
+          "name": "OpenAi Marco"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2d966696-c888-43d9-becb-427287ccbe01",
+              "leftValue": "={{ $json.message.from.id }}",
+              "rightValue": 977291745,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -768,
+        -288
+      ],
+      "id": "e653ce0a-84f5-4059-bd2f-c4c45049d8eb",
+      "name": "Richtige ID?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6d9f1c94-dcc5-4002-9fb6-a8837aa82de3",
+              "leftValue": "={{ $json.message.voice.file_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -576,
+        -304
+      ],
+      "id": "b2e680a4-604c-4595-8eec-6b34896c6d74",
+      "name": "Ist es eine Voicemail?"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -816,
+        32
+      ],
+      "id": "e5ee9f69-90ff-4826-bce2-c7bc6cb52448",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events in Google Calendar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete event in Google Calendar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update event in Google Calendar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "google_calendar_simple": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "google_calendar_with_invite": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Richtige ID?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a file": {
+      "main": [
+        [
+          {
+            "node": "Transcribe a recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe a recording": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Richtige ID?": {
+      "main": [
+        [
+          {
+            "node": "Ist es eine Voicemail?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ist es eine Voicemail?": {
+      "main": [
+        [
+          {
+            "node": "Get a file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "cba84bd4-2d2f-4b93-881b-438463a8a932",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "64a72cb4a0918aa6006695fa975b36b2ac4d3f6c659ee3e73e32450297dad4d3"
+  },
+  "id": "CiRHItH1AGVZIKCN",
+  "tags": [
+    {
+      "updatedAt": "2025-12-30T09:11:35.498Z",
+      "createdAt": "2025-12-30T09:11:35.498Z",
+      "id": "aViBQ5Q9cOkRc3gf",
+      "name": "Chatbot"
+    },
+    {
+      "updatedAt": "2025-12-30T14:00:30.072Z",
+      "createdAt": "2025-12-30T14:00:30.072Z",
+      "id": "LvV4UaBaUNZmAre0",
+      "name": "KI-Agent"
+    }
+  ]
+}
